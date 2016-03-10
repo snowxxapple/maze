@@ -36,7 +36,7 @@ keyCode=event.keyCode;
 (5)canvas元素是行内元素，要设置成块级元素，才能margin:auto；有效，横向居中·
 (6)可以用name来取元素
 ```javascript
-<form name='f>
+<form name='f'>
   <input type='text' name='typeIn'>
   <input type='text' name='typeIn'>
 </form>
