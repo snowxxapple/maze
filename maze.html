@@ -1,243 +1,280 @@
+<!doctype html>
+<!-- 绘制迷宫，存储在localstorage中，并且可以从localstorage中读取迷宫-->
+<!-- 这种通过鼠标和按键来实现物体运动的，每次鼠标或按键状态发生一次变化，就重绘一次画布（之前的一定要擦除），与没有事件触发需要定时器来完成运动的原理是相同的 -->
+<!-- localStorage只能存储字符串，利用数组方法来完成 arr.split('')以特定符号拆分字符串，生成一个数组。arr.join('')以特定符号连接数组元素，生成一个字符串 -->
 <html>
+
 <head>
-	<title>迷宫1</title>
-	<meta charset='utf-8'>
+    <title>迷宫1</title>
+    <meta charset='utf-8'>
 </head>
 <style type="text/css">
-#cvs{
-	margin:auto;
-	background: #cfe;
-	border-radius: 10px;
+#cvs {
+    margin: auto;
+    background: #cfe;
+    border-radius: 10px;
 }
 </style>
+
 <body>
-<canvas id='cvs' width='900px;' height='450px;' style='display:block;'></canvas><!-- canvas要设置块显示才会margin:auto有效 -->
-<p>Pressing mouse button down,drag and release to make a wall.</p>
-<p>Use arrow keys to move token</p>
-<p>Pressing any other key will stop key capture and allow you to save the maze locally</p>
-<form name='sf' onsubmit='return false'>
-保存当前迷宫，输入迷宫名字<br>
-name:<input name='sfName' value='maze_name' type='text'>
-<button id='saveBtn'>Save</button>
-</form>
-<form name='gf' onsubmit='return false'>
-读取保存迷宫，请输入迷宫名字<br>
-name:<input name='gfName' value='maze_name' type='text'>
-	<button  id='getBtn'>Get</button>
-</form>
+    <canvas id='cvs' width='900px;' height='450px;' style='display:block;'></canvas>
+    <!-- canvas要设置块显示才会margin:auto有效 -->
+    <p>Pressing mouse button down,drag and release to make a wall.</p>
+    <p>Use arrow keys to move token</p>
+    <p>Pressing any other key will stop key capture and allow you to save the maze locally</p>
+    <form name='sf' onsubmit='return false'>
+        保存当前迷宫，输入迷宫名字
+        <br> name:
+        <input name='sfName' value='maze_name' type='text'>
+        <button id='saveBtn'>Save</button>
+    </form>
+    <form name='gf' onsubmit='return false'>
+        读取保存迷宫，请输入迷宫名字
+        <br> name:
+        <input name='gfName' value='maze_name' type='text'>
+        <button id='getBtn'>Get</button>
+    </form>
 </body>
 <script type="text/javascript">
-var cavs=document.getElementById('cvs');
-var ctx=cavs.getContext('2d');
-var everything=[];//存放画布上要显示的元素：迷宫的墙和token
-var curwall;//当前绘制的墙（不断变化的）
-var walls=[];//存放所有的墙（画好的，不再变化的墙）
-var wallWidth=5;
-var wallStyle='grey';
-var tokenStyle='pink';
-var cvsWidth=900;
-var cvsHeight=450;
-var imotion=false;//鼠标键是否按下
-var unit=10;//token移动速度
+var cavs = document.getElementById('cvs');
+var ctx = cavs.getContext('2d');
+var everything = []; //存放画布上要显示的元素：迷宫的墙和token
+var curwall; //当前绘制的墙（不断变化的）
+var walls = []; //存放所有的墙（画好的，不再变化的墙）
+var wallWidth = 5;
+var wallStyle = 'grey';
+var tokenStyle = 'pink';
+var cvsWidth = 900;
+var cvsHeight = 450;
+var imotion = false; //鼠标键是否按下
+var unit = 10; //token移动速度
 var mazeName;
+var startX = 20; //小球出发的位置
+var startY = 20;
+var radius = 5; //token的半径
+var exitX = cvsWidth - radius * 3 - 15;
+var exitY = cvsHeight - radius * 3;
 //自定义墙对象
-function wall(sx,sy,fx,fy,width,drawStyle){
-this.sx=sx;
-this.sy=sy;
-this.fx=fx;
-this.fy=fy;
-this.width=width;
-this.strokeStyle=drawStyle;
-this.draw=drawWall;//对象的方法
+function wall(sx, sy, fx, fy, width, drawStyle) {
+    this.sx = sx;
+    this.sy = sy;
+    this.fx = fx;
+    this.fy = fy;
+    this.width = width;
+    this.strokeStyle = drawStyle;
+    this.draw = drawWall; //对象的方法
 }
-function drawWall(){
-	ctx.lineWidth=this.width;//设置线宽
-	ctx.strokeStyle=this.strokeStyle;
-	ctx.beginPath();
-	ctx.moveTo(this.sx,this.sy);
-	ctx.lineTo(this.fx,this.fy);
-	ctx.stroke();
+
+function drawWall() {
+    ctx.lineWidth = this.width; //设置线宽
+    ctx.strokeStyle = this.strokeStyle;
+    ctx.beginPath();
+    ctx.moveTo(this.sx, this.sy);
+    ctx.lineTo(this.fx, this.fy);
+    ctx.stroke();
 }
 //自定义token对象
-function token(cx,cy,rad,fillStyle){
-	this.cx=cx;
-	this.cy=cy;
-	this.rad=rad;
-	this.fillStyle=fillStyle;
-	this.draw=drawToken;//画出token的方法
-	this.moviet=move;//token移动时，判断是否与所有的墙相交
+function token(cx, cy, rad, fillStyle) {
+    this.cx = cx;
+    this.cy = cy;
+    this.rad = rad;
+    this.fillStyle = fillStyle;
+    this.draw = drawToken; //画出token的方法
+    this.moviet = move; //token移动时，判断是否与所有的墙相交
 }
-function drawToken(){
-	ctx.beginPath();
-	ctx.fillStyle=this.fillStyle;
-	ctx.arc(this.cx,this.cy,this.rad,0,Math.PI*2,true);
-	ctx.fill();
+
+function drawToken() {
+    ctx.beginPath();
+    ctx.fillStyle = this.fillStyle;
+    ctx.arc(this.cx, this.cy, this.rad, 0, Math.PI * 2, true);
+    ctx.fill();
 }
-function move(dx,dy){
-	this.cx=this.cx+dx;
-	this.cy=this.cy+dy;
-	var wall;
-	for(var i=0;i<walls.length;i++){
-		wall=walls[i];
-		if(intersect(wall.sx,wall.sy,wall.fx,wall.fy,this.cx,this.cy,this.rad)){//相交
-			alert('再走就撞墙啦！');
-			this.cx=this.cx-dx;
-			this.cy=this.cy-dy;
-			break;//如果检测到与其中一面墙相交，则跳出循环 
-		}
-	}
+
+function move(dx, dy) {
+    this.cx = this.cx + dx;
+    this.cy = this.cy + dy;
+    var wall;
+    for (var i = 0; i < walls.length; i++) {
+        wall = walls[i];
+        if (intersect(wall.sx, wall.sy, wall.fx, wall.fy, this.cx, this.cy, this.rad)) { //相交
+            alert('再走就撞墙啦！');
+            this.cx = this.cx - dx;
+            this.cy = this.cy - dy;
+            break; //如果检测到与其中一面墙相交，则跳出循环 
+        }
+    }
 }
-function intersect(sx,sy,fx,fy,cx,cy,rad){
-	//先找与token最接近的墙上的点，再计算圆心和最近点之间的距离
-	var t;
-	var dx;
-	var dy;
-	var x;
-	var y;
-	dx=fx-sx;
-	dy=fy-sy;
-	t=0.0-((sx-cx)*dx+(sy-cy)*dy)/((dx*dx)+(dy*dy));
-	if(t<0){
-		t=0;
-	}
-	else if(t>1){
-		t=1;
-	}
-	x=sx+t*(fx-sx);
-	y=sy+t*(fy-sy);
-	d=(cx-x)*(cx-x)+(cy-y)*(cy-y);
-	if(d>rad*rad){//没相交
-		return false;
-	}
-	else if(d<=rad*rad){//相交
-		return true;
-	}
+
+function intersect(sx, sy, fx, fy, cx, cy, rad) {
+    //先找与token最接近的墙上的点，再计算圆心和最近点之间的距离
+    var t;
+    var dx;
+    var dy;
+    var x;
+    var y;
+    dx = fx - sx;
+    dy = fy - sy;
+    t = 0.0 - ((sx - cx) * dx + (sy - cy) * dy) / ((dx * dx) + (dy * dy));
+    if (t < 0) {
+        t = 0;
+    } else if (t > 1) {
+        t = 1;
+    }
+    x = sx + t * (fx - sx);
+    y = sy + t * (fy - sy);
+    d = (cx - x) * (cx - x) + (cy - y) * (cy - y);
+    if (d > rad * rad) { //没相交
+        return false;
+    } else if (d <= rad * rad) { //相交
+        return true;
+    }
 }
-var token=new token(20,20,5,tokenStyle);//生成一个token
-everything.push(token);//把token放入到everything数组中
-window.onload=function(){
-	cavs.addEventListener('mousedown',startWall,false);
-	cavs.addEventListener('mousemove',stretchWall,false);
-	cavs.addEventListener('mouseup',finishWall,false);
-	window.addEventListener('keydown',keyMove,false);
-	drawAll();
-	var saveBtn=document.getElementById('saveBtn');
-	var getBtn=document.getElementById('getBtn');
-	saveBtn.addEventListener('click',saveMaze,false);
-	getBtn.addEventListener('click',getMaze,false);
-	document.sf.sfName.addEventListener('focus',remove,false);
-	document.gf.gfName.addEventListener('focus',remove,false);
+var token = new token(20, 20, 5, tokenStyle); //生成一个token
+everything.push(token); //把token放入到everything数组中
+window.onload = function() {
+    cavs.addEventListener('mousedown', startWall, false);
+    cavs.addEventListener('mousemove', stretchWall, false);
+    cavs.addEventListener('mouseup', finishWall, false);
+    window.addEventListener('keydown', keyMove, false);
+    drawAll();
+    var saveBtn = document.getElementById('saveBtn');
+    var getBtn = document.getElementById('getBtn');
+    saveBtn.addEventListener('click', saveMaze, false);
+    getBtn.addEventListener('click', getMaze, false);
+    document.sf.sfName.addEventListener('focus', remove, false);
+    document.gf.gfName.addEventListener('focus', remove, false);
 }
-function remove(){
-	window.removeEventListener('keydown',keyMove,false);
+
+function remove() {
+    window.removeEventListener('keydown', keyMove, false);
 }
-function drawAll(){
-	ctx.clearRect(0,0,cvsWidth,cvsHeight);
-	for(var i=0;i<everything.length;i++){
-		everything[i].draw();
-	}
+
+function drawAll() {
+    ctx.clearRect(0, 0, cvsWidth, cvsHeight);
+    //给迷宫设置出口和入口位置
+    ctx.font = 'bold 12px sans-serif';
+    ctx.fillStyle = 'black';
+    ctx.fillText('入口', 5, 5 + radius * 3);
+    ctx.fillText('出口', exitX, exitY); //出口坐标要记住，以便于判断小球是否已成功出去
+    for (var i = 0; i < everything.length; i++) {
+        everything[i].draw();
+    }
 }
-function startWall(ev){
-	//获取鼠标坐标
-	var mx;
-	var my;
-	if(ev.layerX||ev.layerX==0){
-		mx=ev.layerX;
-		my=ev.layerY;
-	}
-	else if(ev.offsetX||ev.offsetX==0){
-		mx=ev.offsetX;
-		my=ev.offsetY;
-	}
-	curwall=new wall(mx,my,mx+1,my+1,wallWidth,wallStyle);
-	imotion=true;
-	everything.push(curwall);
-	drawAll();
+
+function startWall(ev) {
+    //获取鼠标坐标
+    var mx;
+    var my;
+    if (ev.layerX || ev.layerX == 0) {
+        mx = ev.layerX;
+        my = ev.layerY;
+    } else if (ev.offsetX || ev.offsetX == 0) {
+        mx = ev.offsetX;
+        my = ev.offsetY;
+    }
+    //建立一个墙对象
+    curwall = new wall(mx, my, mx + 1, my + 1, wallWidth, wallStyle);
+    imotion = true; //标志位 鼠标按键是否按下
+    everything.push(curwall);
+    drawAll();
 }
-function stretchWall(ev){	
-	if(imotion){
-		if(ev.layerX||ev.layerX==0){
-		mx=ev.layerX;
-		my=ev.layerY;
-	}
-	else if(ev.offsetX||ev.offsetX==0){
-		mx=ev.offsetX;
-		my=ev.offsetY;
-	}
-	curwall.fx=mx;//更改wall的属性值
-	curwall.fy=my;
-	drawAll();
-	}
+//鼠标键按下时，才能画墙 否则就是一个点
+function stretchWall(ev) {
+    if (imotion) {
+        if (ev.layerX || ev.layerX == 0) {
+            mx = ev.layerX;
+            my = ev.layerY;
+        } else if (ev.offsetX || ev.offsetX == 0) {
+            mx = ev.offsetX;
+            my = ev.offsetY;
+        }
+        //墙wall的结束点为鼠标当前坐标
+        curwall.fx = mx; //更改wall的属性值
+        curwall.fy = my;
+        drawAll();
+    }
 }
-function finishWall(ev){
-	imotion=false;
-	walls.push(curwall);//把画好的墙放到walls数组中
+//绘制墙结束
+function finishWall(ev) {
+    imotion = false;
+    walls.push(curwall); //把画好的墙放到walls数组中
 }
-function keyMove(){
-	var keyCode;
-	//获取按键值
-	if(event==null){
-		keyCode=window.event.keyCode;
-		window.event.preventDefault();
-	}
-	else{
-		keyCode=event.keyCode;
-		window.event.preventDefault();
-	}
-	switch(keyCode){
-		case 37:token.moviet(-unit,0);break;
-		case 38:token.moviet(0,-unit);break;
-		case 39:token.moviet(unit,0);break;
-		case 40:token.moviet(0,unit);break;
-		case 123:window.removeEventListener('keydown',keyMove,false);
-		default:token.moviet(0,0);
-	}
-	drawAll();
+//键盘按键函数
+function keyMove() {
+    var keyCode;
+    //获取按键值
+    if (event == null) {
+        keyCode = window.event.keyCode;
+    } else {
+        keyCode = event.keyCode;
+        window.event.preventDefault();
+    }
+    switch (keyCode) {
+        case 37:
+            token.moviet(-unit, 0);
+            break;
+        case 38:
+            token.moviet(0, -unit);
+            break;
+        case 39:
+            token.moviet(unit, 0);
+            break;
+        case 40:
+            token.moviet(0, unit);
+            break;
+        default:
+            token.moviet(0, 0);
+    }
+    drawAll();
 }
 //以下为本地存储功能 
-function saveMaze(){
-	var dangWall;
-	var allWall=[];
-	var singleWall=[];
-	var oneWall;
-	var sx;
-	var sy;
-	var fx;
-	var fy;
-	mazeName=document.sf.sfName.value;
-	for(var i=0;i<walls.length;i++){
-		singleWall=[];
-		singleWall.push(walls[i].sx);
-		singleWall.push(walls[i].sy);
-		singleWall.push(walls[i].fx);
-		singleWall.push(walls[i].fy);//singleWall=[sx,sy,fx,fy]
-		console.log(singleWall);
-		oneWall=singleWall.join("+");//“sx+sy+fx+fy”
-		console.log(oneWall);
-		console.log(typeof(oneWall));
-		allWall.push(oneWall);//['sx1+sy1+fx1+fy1','sx2+sy2+fx2+fy2','...','...',...] 不要写成allWall=allWall.push();直接allWall.push()
-		console.log(allWall);
-	}
-	console.log(allWall);
-	allWall=allWall.join(';');//将墙的信息转化为字符串 "sx1+sy1+fx1+fy1;sx2+sy2+fx2+fy2;..."
-	console.log(allWall);
-	localStorage.setItem(mazeName,allWall);
-	window.addEventListener('keydown',keyMove,false);
+function saveMaze() {
+    var dangWall;
+    var allWall = [];
+    var singleWall = [];
+    var oneWall;
+    var sx;
+    var sy;
+    var fx;
+    var fy;
+    mazeName = document.sf.sfName.value;
+    for (var i = 0; i < walls.length; i++) {
+        singleWall = [];
+        singleWall.push(walls[i].sx);
+        singleWall.push(walls[i].sy);
+        singleWall.push(walls[i].fx);
+        singleWall.push(walls[i].fy); //singleWall=[sx,sy,fx,fy]
+        console.log(singleWall);
+        oneWall = singleWall.join("+"); //“sx+sy+fx+fy”
+        console.log(oneWall);
+        console.log(typeof(oneWall));
+        allWall.push(oneWall); //['sx1+sy1+fx1+fy1','sx2+sy2+fx2+fy2','...','...',...] 不要写成allWall=allWall.push();直接allWall.push()
+        console.log(allWall);
+    }
+    console.log(allWall);
+    allWall = allWall.join(';'); //将墙的信息转化为字符串 "sx1+sy1+fx1+fy1;sx2+sy2+fx2+fy2;..."
+    console.log(allWall);
+    localStorage.setItem(mazeName, allWall);
+    window.addEventListener('keydown', keyMove, false);
 }
-function getMaze(){
-	mazeName=document.gf.gfName.value;
-	var string=localStorage.getItem(mazeName);
-	var allWall=string.split(';');//['sx1+sy1+fx1+fy1','sx2+sy2+fx2+fy2','...',...]
-	for(var i=0;i<allWall.length;i++){
-		var oneWall=allWall[i];//'sx1+sy1+fx1+fy1','sx2+sy2+fx2+fy2',...
-		var w=oneWall.split('+');//[sx1,sy1,fx1,fy1]
-		console.log(typeof(w[0]));//String 最好把String转化为数字，尽管不转化也可以
-		var newWall=new wall(Number(w[0]),Number(w[1]),Number(w[2]),Number(w[3]),wallWidth,wallStyle);
-		everything.push(newWall);
-		walls.push(newWall);		
-	}
-drawAll();
-window.addEventListener('keydown',keyMove,false);
+
+function getMaze() {
+    mazeName = document.gf.gfName.value;
+    var string = localStorage.getItem(mazeName);
+    if (string != null) {
+        var allWall = string.split(';'); //['sx1+sy1+fx1+fy1','sx2+sy2+fx2+fy2','...',...]
+        for (var i = 0; i < allWall.length; i++) {
+            var oneWall = allWall[i]; //'sx1+sy1+fx1+fy1','sx2+sy2+fx2+fy2',...
+            var w = oneWall.split('+'); //[sx1,sy1,fx1,fy1]
+            console.log(typeof(w[0])); //String 最好把String转化为数字，尽管不转化也可以
+            var newWall = new wall(Number(w[0]), Number(w[1]), Number(w[2]), Number(w[3]), wallWidth, wallStyle);
+            everything.push(newWall);
+            walls.push(newWall);
+        }
+        drawAll();
+        window.addEventListener('keydown', keyMove, false);
+    }
 }
 </script>
+
 </html>
